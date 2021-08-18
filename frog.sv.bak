@@ -1,0 +1,124 @@
+//-------------------------------------------------------------------------
+//    Ball.sv                                                            --
+//    Viral Mehta                                                        --
+//    Spring 2005                                                        --
+//                                                                       --
+//    Modified by Stephen Kempf 03-01-2006                               --
+//                              03-12-2007                               --
+//    Translated by Joe Meng    07-07-2013                               --
+//    Modified by Po-Han Huang  12-08-2017                               --
+//    Spring 2018 Distribution                                           --
+//                                                                       --
+//    For use with ECE 385 Lab 8                                         --
+//    UIUC ECE Department                                                --
+//-------------------------------------------------------------------------
+
+
+module  Frog ( input         Clk,                // 50 MHz clock
+                             Reset,              // Active-high reset signal
+                             frame_clk,          // The clock indicating a new frame (~60Hz)
+					input [7:0]	  keycode,
+               input [9:0]   DrawX, DrawY,       // Current pixel coordinates
+               output logic  is_frog             // Whether current pixel belongs to ball or background
+              );
+    
+    parameter [9:0] Frog_X_Center = 10'd320;  // Center position on the X axis
+    parameter [9:0] Frog_Y_Center = 10'd240;  // Center position on the Y axis
+    parameter [9:0] Frog_X_Min = 10'd0;       // Leftmost point on the X axis
+    parameter [9:0] Frog_X_Max = 10'd639;     // Rightmost point on the X axis
+    parameter [9:0] Frog_Y_Min = 10'd0;       // Topmost point on the Y axis
+    parameter [9:0] Frog_Y_Max = 10'd479;     // Bottommost point on the Y axis
+    parameter [9:0] Frog_X_Step = 10'd9;      // Step size on the X axis
+    parameter [9:0] Frog_Y_Step = 10'd9;      // Step size on the Y axis
+    parameter [9:0] Frog_Size = 10'd4;        // Ball size
+    
+    logic [9:0] Frog_X_Pos = 10'd320;
+	 logic [9:0] Frog_Y_Pos = 10'd240;
+    logic [9:0] Frog_X_Pos_in = 10'd320;
+	 logic [9:0] Frog_Y_Pos_in = 10'd240;
+	 logic [7:0] LastKeycode = 8'b0;
+	 logic NewKeycode = 1'b1;
+	 
+    
+    //////// Do not modify the always_ff blocks. ////////
+    // Detect rising edge of frame_clk
+    logic frame_clk_delayed, frame_clk_rising_edge;
+    always_ff @ (posedge Clk) begin
+        frame_clk_delayed <= frame_clk;
+        frame_clk_rising_edge <= (frame_clk == 1'b1) && (frame_clk_delayed == 1'b0);
+    end
+    // Update registers
+    always_ff @ (posedge Clk)
+    begin
+        if (Reset)
+        begin
+            Frog_X_Pos <= Frog_X_Center;
+            Frog_Y_Pos <= Frog_Y_Center;
+				LastKeycode <= 8'h0;
+				NewKeycode <= 1'b1;
+        end
+        else
+        begin
+            Frog_X_Pos <= Frog_X_Pos_in;
+            Frog_Y_Pos <= Frog_Y_Pos_in;
+				if(LastKeycode != keycode)
+				begin
+					LastKeycode <= keycode;
+					NewKeycode <= 1'b1;
+				end
+				else if (frame_clk_rising_edge)
+				begin
+					NewKeycode <= 1'b0;
+				end
+        end
+    end
+    
+    always_comb
+    begin
+        // By default, keep motion and position unchanged
+        Frog_X_Pos_in = Frog_X_Pos;
+        Frog_Y_Pos_in = Frog_Y_Pos;
+        
+        // Update position and motion only at rising edge of frame clock
+        if (frame_clk_rising_edge)
+        begin
+				if(NewKeycode == 1'b1)
+				begin
+					if (keycode == 8'h1a) //w
+					begin
+						 Frog_Y_Pos_in = Frog_Y_Pos + (~(Frog_Y_Step) + 1'b1);  // 2's complement.  
+					end
+					else if (keycode == 8'h04) //a
+					begin
+						 Frog_X_Pos_in = Frog_X_Pos + (~(Frog_X_Step) + 1'b1);  // 2's complement. 
+					end
+					else if (keycode == 8'h16) //s
+					begin
+						 Frog_Y_Pos_in = Frog_Y_Pos + Frog_Y_Step;
+					end
+					else if (keycode == 8'h07) //d
+					begin
+						 Frog_X_Pos_in = Frog_X_Pos + Frog_X_Step;
+					end
+				end
+        end
+    end
+    
+    // Compute whether the pixel corresponds to ball or background
+    /* Since the multiplicants are required to be signed, we have to first cast them
+       from logic to int (signed by default) before they are multiplied. */
+    int DistX, DistY, Size;
+    assign DistX = DrawX - Frog_X_Pos;
+    assign DistY = DrawY - Frog_Y_Pos;
+    assign Size = Frog_Size;
+    always_comb begin
+        if ( ( DistX*DistX + DistY*DistY) <= (Size*Size) ) 
+            is_frog = 1'b1;
+        else
+            is_frog = 1'b0;
+        /* The ball's (pixelated) circle is generated using the standard circle formula.  Note that while 
+           the single line is quite powerful descriptively, it causes the synthesis tool to use up three
+           of the 12 available multipliers on the chip! */
+    end
+    
+endmodule

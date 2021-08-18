@@ -1,0 +1,152 @@
+module Car2Row(input       	Clk,                // 50 MHz clock
+									Reset,              // Active-high reset signal
+									frame_clk,          // The clock indicating a new frame (~60Hz));
+				  input [2:0]  RowNumber,
+				  input [9:0]	CarSpeed, Offset1, Offset2,
+				  input [9:0]  DrawX, DrawY,
+				  output logic	is_car_out);
+
+	logic [9:0] Car_Y_Center = 10'd290;
+	logic [1:0] is_car_row;
+	logic CarDirection;
+
+	always_comb
+	begin
+		Car_Y_Center = 10'd290;
+		CarDirection = 1'b0;
+		case(RowNumber)
+			3'b000: 
+			begin
+				Car_Y_Center = 10'd340;
+				CarDirection = 1'b0;
+			end
+			3'b001: 
+			begin
+				Car_Y_Center = 10'd320;
+				CarDirection = 1'b1;
+			end
+			3'b010: 
+			begin
+				Car_Y_Center = 10'd300;
+				CarDirection = 1'b0;
+			end
+			3'b011: 
+			begin
+				Car_Y_Center = 10'd280;
+				CarDirection = 1'b1;
+			end
+			3'b100: 
+			begin
+				Car_Y_Center = 10'd260;
+				CarDirection = 1'b0;
+			end
+		endcase
+		
+		if(is_car_row == 2'b00)
+			is_car_out = 1'b0;
+		else
+			is_car_out = 1'b1;
+	end
+
+	Car car_instance1(.*, .is_car(is_car_row[0]), .Car_X_Offset(Offset1));
+	Car car_instance2(.*, .is_car(is_car_row[1]), .Car_X_Offset(Offset2));
+
+endmodule
+
+
+
+module Car(input         Clk,                // 50 MHz clock
+								  Reset,              // Active-high reset signal
+								  frame_clk,          // The clock indicating a new frame (~60Hz)
+								  CarDirection,
+				input [9:0]	  CarSpeed, Car_Y_Center, Car_X_Offset,
+				input [9:0]   DrawX, DrawY,       // Current pixel coordinates
+				output logic  is_car);
+
+    logic [9:0] Car_X_Center = 10'd220;  // Center position on the X axis
+    //logic [9:0] Car_Y_Center = 10'd250;  // Center position on the Y axis
+	 parameter [9:0] Car_X_Min = 10'd220;     // Leftmost point on the X axis
+    parameter [9:0] Car_X_Max = 10'd440;     // Rightmost point on the X axis
+    parameter [9:0] Car_Size_X = 10'd20;     // Car size X will change depending on car type
+	 parameter [9:0] Car_Size_Y = 10'd20;		// Car size Y probably will be constant
+
+
+    logic [9:0] Car_X_Pos = 10'd220;
+	 logic [9:0] Car_Y_Pos = 10'd250;
+    logic [9:0] Car_X_Pos_in = 10'd400;
+	 logic [9:0] Car_Motion = 10'd0;
+	 
+	 assign Car_X_Center = 10'd270 + Car_X_Offset;
+	 
+	 
+    logic frame_clk_delayed, frame_clk_rising_edge;
+    always_ff @ (posedge Clk) begin
+        frame_clk_delayed <= frame_clk;
+        frame_clk_rising_edge <= (frame_clk == 1'b1) && (frame_clk_delayed == 1'b0);
+    end
+	 
+	 
+	 always_ff @ (posedge Clk) begin
+			if(Reset)
+			begin
+				Car_X_Pos <= Car_X_Center;
+				Car_Y_Pos <= Car_Y_Center;
+			end
+			else if (frame_clk_rising_edge)
+			begin
+				Car_X_Pos <= Car_X_Pos_in;
+			end
+	 
+	 end
+	 
+	 
+	 always_comb
+	 begin
+		if(CarDirection)
+		begin
+			Car_Motion = CarSpeed;
+		end
+		else
+		begin
+			Car_Motion = ((~CarSpeed) + 1'b1);
+		end
+	 
+	 
+		Car_X_Pos_in = Car_X_Pos;
+		if(frame_clk_rising_edge)
+		begin
+			if(~CarDirection)
+			begin
+				if((Car_X_Pos + Car_Size_X) <= Car_X_Min)
+					Car_X_Pos_in = Car_X_Max + 1'b1;
+				else
+					Car_X_Pos_in = Car_X_Pos + Car_Motion;
+			end
+			else
+			begin
+				if(Car_X_Pos > Car_X_Max)
+					Car_X_Pos_in = Car_X_Min + (~Car_Size_X + 1'b1);
+				else
+					Car_X_Pos_in = Car_X_Pos + Car_Motion;
+			end
+		end
+	 
+	 
+	 
+	 end
+
+
+	 
+	 int DistX, DistY, SizeX, SizeY;
+    assign DistX = DrawX - Car_X_Pos;
+    assign DistY = DrawY - Car_Y_Pos;
+    assign SizeX = Car_Size_X;
+	 assign SizeY = Car_Size_Y;
+    always_comb begin
+        if ( (DistX < SizeX)&&(DistY < SizeY)&&(DistX >= 0)&&(DistY >= 0) ) 
+            is_car = 1'b1;
+        else
+            is_car = 1'b0;
+    end
+	 
+endmodule

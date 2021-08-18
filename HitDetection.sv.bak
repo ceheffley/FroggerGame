@@ -1,0 +1,7 @@
+module HitDetection(input is_ball, isCar);
+
+
+
+
+
+endmodule 
